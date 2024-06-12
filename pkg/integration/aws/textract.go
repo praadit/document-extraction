@@ -36,10 +36,39 @@ func (s *Textract) ExtractText(ctx context.Context, decodeFile []byte, bucketNam
 		Document: doc,
 	})
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 
-	return output, err
+	return output, nil
+}
+func (s *Textract) StartExtractText(ctx context.Context, bucketName, key *string) (*textract.StartDocumentTextDetectionOutput, error) {
+	doc := &types.DocumentLocation{
+		S3Object: &types.S3Object{
+			Bucket: bucketName,
+			Name:   key,
+		},
+	}
+
+	started, err := s.svc.StartDocumentTextDetection(ctx, &textract.StartDocumentTextDetectionInput{
+		DocumentLocation: doc,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return started, nil
+}
+
+func (s *Textract) GetExtractText(ctx context.Context, jobId string) (*textract.GetDocumentTextDetectionOutput, error) {
+	output, err := s.svc.GetDocumentTextDetection(ctx, &textract.GetDocumentTextDetectionInput{
+		JobId: &jobId,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return output, nil
 }
 
 func (s *Textract) ExtractFormAndTable(ctx context.Context, decodeFile []byte, bucketName, key *string) (*textract.AnalyzeDocumentOutput, error) {
@@ -53,9 +82,40 @@ func (s *Textract) ExtractFormAndTable(ctx context.Context, decodeFile []byte, b
 			Name:   key,
 		}
 	}
+
 	output, err := s.svc.AnalyzeDocument(ctx, &textract.AnalyzeDocumentInput{
 		Document:     doc,
 		FeatureTypes: []types.FeatureType{types.FeatureTypeForms, types.FeatureTypeTables, types.FeatureTypeSignatures, types.FeatureTypeLayout},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return output, nil
+}
+
+func (s *Textract) StartExtractFormAndTable(ctx context.Context, bucketName, key *string) (*textract.StartDocumentAnalysisOutput, error) {
+	doc := &types.DocumentLocation{
+		S3Object: &types.S3Object{
+			Bucket: bucketName,
+			Name:   key,
+		},
+	}
+
+	started, err := s.svc.StartDocumentAnalysis(ctx, &textract.StartDocumentAnalysisInput{
+		DocumentLocation: doc,
+		FeatureTypes:     []types.FeatureType{types.FeatureTypeForms, types.FeatureTypeTables, types.FeatureTypeSignatures, types.FeatureTypeLayout},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return started, nil
+}
+
+func (s *Textract) GetExtractFormAndTable(ctx context.Context, jobId string) (*textract.GetDocumentAnalysisOutput, error) {
+	output, err := s.svc.GetDocumentAnalysis(ctx, &textract.GetDocumentAnalysisInput{
+		JobId: &jobId,
 	})
 	if err != nil {
 		return nil, err

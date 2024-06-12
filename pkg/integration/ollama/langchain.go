@@ -33,18 +33,18 @@ func (o *Ollama) SummarizeText(ctx context.Context, textToSummarize string) (str
 	template := fmt.Sprintf(`Given a full document, give me a concise summary. Skip any preamble text and just give the summary.
 	<document>%s</document>`, textToSummarize)
 
-	completion, err := o.svc.Call(ctx, template,
-		llms.WithTemperature(temperature),
-		// llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
-		// 	fmt.Print(string(chunk))
-		// 	return nil
-		// }),
-	)
-	if err != nil {
-		return "", err
-	}
+	// completion, err := o.svc.Call(ctx, template,
+	// 	llms.WithTemperature(temperature),
+	// 	// llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
+	// 	// 	fmt.Print(string(chunk))
+	// 	// 	return nil
+	// 	// }),
+	// )
+	// if err != nil {
+	// 	return "", err
+	// }
 
-	return completion, nil
+	return template, nil
 }
 func (o *Ollama) SummarizeForm(ctx context.Context, textToSummarize string, data any) (string, error) {
 	dataString, _ := json.Marshal(data)
@@ -52,18 +52,18 @@ func (o *Ollama) SummarizeForm(ctx context.Context, textToSummarize string, data
 	<document>%s</document>
 	<form_data>%s</form_data>`, textToSummarize, dataString)
 
-	completion, err := o.svc.Call(ctx, template,
-		llms.WithTemperature(temperature),
-		// llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
-		// 	fmt.Print(string(chunk))
-		// 	return nil
-		// }),
-	)
-	if err != nil {
-		return "", err
-	}
+	// completion, err := o.svc.Call(ctx, template,
+	// 	llms.WithTemperature(temperature),
+	// 	// llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
+	// 	// 	fmt.Print(string(chunk))
+	// 	// 	return nil
+	// 	// }),
+	// )
+	// if err != nil {
+	// 	return "", err
+	// }
 
-	return completion, nil
+	return template, nil
 }
 func (o *Ollama) ClassifyDocument(ctx context.Context, textToSummarize string) (string, error) {
 	template := fmt.Sprintf(`Given a list of classes, classify the document into one of these classes. Skip any preamble text and just give the class name.

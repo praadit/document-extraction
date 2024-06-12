@@ -8,7 +8,7 @@ type Document struct {
 	Blocks           []Block            `bson:"blocks"`
 	DocumentMetadata *DocumentMetadata  `bson:"documentMetadata"`
 	MappedKeyValue   []KeyValueSet      `bson:"mappedKeyValues"`
-	ExtarctType      string             `bson:"extractType"`
+	ExtractType      string             `bson:"extractType"`
 	Summary          string             `bson:"summary"`
 }
 

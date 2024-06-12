@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 
@@ -32,4 +33,18 @@ func (s *S3) Upload(ctx context.Context, bucketName string, objectKey string, fi
 	}
 
 	return err
+}
+
+func (s *S3) GetObject(ctx context.Context, bucketName string, objectKey string) error {
+	obj, err := s.svc.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &bucketName,
+		Key:    &objectKey,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(obj.ChecksumSHA256)
+
+	return nil
 }
