@@ -189,13 +189,13 @@ func (c *Controller) SummarizeDocument(ctx *gin.Context) {
 		summary = sum
 	}
 
-	// err = c.Db.UpdateOne(ctx, constants.MODEL_DOCUMENT, mQuery, bson.D{{Key: "$set", Value: bson.D{{Key: "summary", Value: summary}}}})
-	// if err != nil {
-	// 	ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
-	// 		Message: utils.FilterError(ctx, err, "failed to set summarize").Error(),
-	// 	})
-	// 	return
-	// }
+	err = c.Db.UpdateOne(ctx, constants.MODEL_DOCUMENT, mQuery, bson.D{{Key: "$set", Value: bson.D{{Key: "summary", Value: summary}}}})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to set summarize").Error(),
+		})
+		return
+	}
 
 	ctx.JSON(http.StatusOK, response.BaseResponse{
 		Data: summary,
