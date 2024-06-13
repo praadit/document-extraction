@@ -10,6 +10,7 @@ type Document struct {
 	MappedKeyValue   []KeyValueSet      `bson:"mappedKeyValues"`
 	ExtractType      string             `bson:"extractType"`
 	Summary          string             `bson:"summary"`
+	BedrockResponse  any                `bson:"bedrockResponse"`
 }
 
 type DocumentMetadata struct {

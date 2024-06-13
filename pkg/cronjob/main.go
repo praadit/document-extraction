@@ -93,8 +93,11 @@ func (c *Cron) GetTextract() {
 			continue
 		}
 
+		kvSets := helper.MapFormType(doc.Blocks)
+		doc.MappedKeyValue = kvSets
+
 		if len(doc.Blocks) > 0 {
-			err = c.control.Db.UpdateOne(ctx, constants.MODEL_DOCUMENT, mQuery, bson.D{{Key: "$set", Value: bson.D{{Key: "blocks", Value: doc.Blocks}, {Key: "documentMetadata", Value: doc.DocumentMetadata}}}})
+			err = c.control.Db.UpdateOne(ctx, constants.MODEL_DOCUMENT, mQuery, bson.D{{Key: "$set", Value: bson.D{{Key: "blocks", Value: doc.Blocks}, {Key: "mappedKeyValues", Value: doc.MappedKeyValue}, {Key: "documentMetadata", Value: doc.DocumentMetadata}}}})
 			if err != nil {
 				utils.FilterError(ctx, err, "failed to set document block")
 				continue

@@ -46,16 +46,19 @@ func setupController() *controller.Controller {
 	// controller.InitChroma()
 	customProvider := aws.AwsCredentialProvider{}
 
-	awsConfig, err := config.LoadDefaultConfig(context.Background(), config.WithCredentialsProvider(customProvider), func(lo *config.LoadOptions) error {
-		return nil
-	})
+	awsConfig, err := config.LoadDefaultConfig(context.Background(),
+		config.WithCredentialsProvider(customProvider),
+		config.WithRegion(utils.Config.AwsBucketRegion),
+		func(lo *config.LoadOptions) error {
+			return nil
+		})
 	if err != nil {
-		return nil
+		log.Panic("failed to setup aws, err : " + err.Error())
 	}
 
 	tract := aws.InitTextract(awsConfig)
-	bed := aws.InitBedrock(awsConfig)
 	s3 := aws.InitS3(awsConfig)
+	bed := aws.InitBedrock(awsConfig, &utils.Config.AwsBedrockRegion)
 	ollama := ollama.InitOllama()
 	db := repo.InitDatabase(utils.Config.MongoConn, utils.Config.MongoDbName)
 
@@ -78,6 +81,7 @@ func setupGinServer(r *gin.Engine) {
 
 func setupRoutes(r *gin.Engine, server *pkg.Server) {
 	r.POST("/extract", server.Controller.ExtractDocument)
-	r.POST("/process", server.Controller.SummarizeDocument)
 	r.POST("/start-extract", server.Controller.ExtractDocumentAsync)
+	r.POST("/process", server.Controller.SummarizeDocument)
+	r.POST("/bedrock-process", server.Controller.BedrockSummarizeDocument)
 }

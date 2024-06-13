@@ -1,10 +1,12 @@
 package helper
 
 import (
+	"encoding/json"
 	"strings"
 	"textract-mongo/pkg/model"
 	"textract-mongo/pkg/utils"
 
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/textract/types"
 )
 
@@ -148,4 +150,42 @@ func OutputBlockToModel(blocks []types.Block) []model.Block {
 		blockModels = append(blockModels, block)
 	}
 	return blockModels
+}
+
+func GetResponseOfBedrockConverseOutput(converseOutput *bedrockruntime.ConverseOutput) ([]string, error) {
+	outputMap := map[string]any{}
+
+	str, err := json.Marshal(converseOutput)
+	if err != nil {
+		return nil, err
+	}
+	json.Unmarshal([]byte(str), &outputMap)
+
+	output := map[string]any{}
+	if val, ok := outputMap["Output"].(map[string]any); ok {
+		output = val
+	}
+	value := map[string]any{}
+	if val, ok := output["Value"].(map[string]any); ok {
+		value = val
+	}
+	content := []any{}
+	if val, ok := value["Content"].([]any); ok {
+		content = val
+	}
+
+	result := []string{}
+	for _, v := range content {
+		txt := ""
+		if val, ok := v.(map[string]any); ok {
+			if tx, ok2 := val["Value"].(string); ok2 {
+				txt = tx
+			}
+		}
+		if len(txt) > 0 {
+			result = append(result, txt)
+		}
+	}
+
+	return result, nil
 }

@@ -11,10 +11,11 @@ type Configuration struct {
 	ServerAddr         string
 	MongoConn          string `mapstructure:"MONGO_CONN"`
 	MongoDbName        string `mapstructure:"MONGO_DB_NAME"`
-	AwsS3Bucket        string `mapstructure:"AMAZON_S3BUCKET"`
-	AwsRegion          string `mapstructure:"AMAZON_REGION"`
-	AwsAccessKeyID     string `mapstructure:"AMAZON_ACCESS_KEY_ID"`
-	AwsSecretAccessKey string `mapstructure:"AMAZON_SECRET_ACCESS_KEY"`
+	AwsS3Bucket        string `mapstructure:"AWS_S3BUCKET"`
+	AwsBucketRegion    string `mapstructure:"AWS_BUCKET_REGION"`
+	AwsBedrockRegion   string `mapstructure:"AWS_BEDROCK_REGION"`
+	AwsAccessKeyID     string `mapstructure:"AWS_ACCESS_KEY_ID"`
+	AwsSecretAccessKey string `mapstructure:"AWS_SECRET_ACCESS_KEY"`
 }
 
 var Env string
@@ -38,10 +39,11 @@ func LoadEnv() (config Configuration, err error) {
 		ServerAddr:         os.Getenv("SERVER_ADDR"),
 		MongoConn:          os.Getenv("MONGO_CONN"),
 		MongoDbName:        os.Getenv("MONGO_DB_NAME"),
-		AwsS3Bucket:        os.Getenv("AMAZON_S3BUCKET"),
-		AwsRegion:          os.Getenv("AMAZON_REGION"),
-		AwsAccessKeyID:     os.Getenv("AMAZON_ACCESS_KEY_ID"),
-		AwsSecretAccessKey: os.Getenv("AMAZON_SECRET_ACCESS_KEY"),
+		AwsS3Bucket:        os.Getenv("AWS_S3BUCKET"),
+		AwsBucketRegion:    os.Getenv("AWS_BUCKET_REGION"),
+		AwsBedrockRegion:   os.Getenv("AWS_BEDROCK_REGION"),
+		AwsAccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
+		AwsSecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
 	}
 
 	Env = env
