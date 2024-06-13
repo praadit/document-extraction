@@ -59,9 +59,10 @@ func (s *Textract) StartExtractText(ctx context.Context, bucketName, key *string
 	return started, nil
 }
 
-func (s *Textract) GetExtractText(ctx context.Context, jobId string) (*textract.GetDocumentTextDetectionOutput, error) {
+func (s *Textract) GetExtractText(ctx context.Context, jobId string, nextToken *string) (*textract.GetDocumentTextDetectionOutput, error) {
 	output, err := s.svc.GetDocumentTextDetection(ctx, &textract.GetDocumentTextDetectionInput{
-		JobId: &jobId,
+		JobId:     &jobId,
+		NextToken: nextToken,
 	})
 
 	if err != nil {
@@ -113,9 +114,10 @@ func (s *Textract) StartExtractFormAndTable(ctx context.Context, bucketName, key
 	return started, nil
 }
 
-func (s *Textract) GetExtractFormAndTable(ctx context.Context, jobId string) (*textract.GetDocumentAnalysisOutput, error) {
+func (s *Textract) GetExtractFormAndTable(ctx context.Context, jobId string, nextToken *string) (*textract.GetDocumentAnalysisOutput, error) {
 	output, err := s.svc.GetDocumentAnalysis(ctx, &textract.GetDocumentAnalysisInput{
-		JobId: &jobId,
+		JobId:     &jobId,
+		NextToken: nextToken,
 	})
 	if err != nil {
 		return nil, err

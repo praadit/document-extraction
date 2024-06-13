@@ -110,6 +110,9 @@ func (c *Controller) ExtractDocument(ctx *gin.Context) {
 	kvSets := helper.MapFormType(doc.Blocks)
 	doc.MappedKeyValue = kvSets
 
+	tbSets := helper.MapTableType(doc.Blocks)
+	doc.MappedTables = tbSets
+
 	err := c.Db.InsertOne(ctx, constants.MODEL_DOCUMENT, doc)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
@@ -345,7 +348,11 @@ func (c *Controller) BedrockSummarizeDocument(ctx *gin.Context) {
 	summary := ""
 	var bedrockOutput any
 	if doc.ExtractType == constants.ExtractType_Form {
-		sum, err := c.bedrock.SummarizeForm(ctx, textToSummarize, doc.MappedKeyValue)
+		var tableData any = nil
+		if doc.MappedTables != nil && len(doc.MappedTables) > 0 {
+			tableData = doc.MappedTables
+		}
+		sum, err := c.bedrock.SummarizeForm(ctx, textToSummarize, doc.MappedKeyValue, tableData)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
 				Message: utils.FilterError(ctx, err, "failed to summarize form document").Error(),
@@ -387,5 +394,60 @@ func (c *Controller) BedrockSummarizeDocument(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, response.BaseResponse{
 		Data: summary,
+	})
+}
+
+func (c *Controller) MapTable(ctx *gin.Context) {
+	var body request.ProcessResultRequest
+	if err := ctx.Bind(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to bind request").Error(),
+		})
+		return
+	}
+
+	var mQuery bson.M
+	if len(body.Id) > 0 {
+		id, err := primitive.ObjectIDFromHex(body.Id)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+				Message: utils.FilterError(ctx, err, "failed to parse id").Error(),
+			})
+			return
+		}
+		mQuery = bson.M{"_id": id}
+	} else if len(body.Key) > 0 {
+		mQuery = bson.M{"name": body.Key}
+	} else {
+		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+			Message: "please fil the document identifier",
+		})
+		return
+	}
+
+	doc := model.Document{}
+	err := c.Db.FindOne(ctx, constants.MODEL_DOCUMENT, mQuery, &doc)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to get document").Error(),
+		})
+		return
+	}
+
+	tables := helper.MapTableType(doc.Blocks)
+
+	for tableId, table := range tables {
+		fmt.Printf("Table : %s\n", tableId)
+		for _, row := range table {
+			for _, cell := range row {
+				fmt.Printf("%s	| ", cell)
+			}
+			fmt.Println()
+		}
+		fmt.Println()
+	}
+
+	ctx.JSON(http.StatusOK, response.BaseResponse{
+		Data: tables,
 	})
 }

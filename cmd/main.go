@@ -67,7 +67,7 @@ func setupController() *controller.Controller {
 
 func runCron(job *cronjob.Cron) {
 	cron := cron.New()
-	cron.AddFunc("* * * * *", job.GetTextract)
+	cron.AddFunc("*/10 * * * *", job.GetTextract)
 
 	cron.Start()
 }
@@ -84,4 +84,5 @@ func setupRoutes(r *gin.Engine, server *pkg.Server) {
 	r.POST("/start-extract", server.Controller.ExtractDocumentAsync)
 	r.POST("/process", server.Controller.SummarizeDocument)
 	r.POST("/bedrock-process", server.Controller.BedrockSummarizeDocument)
+	r.POST("/map", server.Controller.MapTable)
 }

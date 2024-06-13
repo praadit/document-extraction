@@ -51,43 +51,57 @@ func (c *Cron) GetTextract() {
 		}
 
 		if doc.ExtractType == constants.ExtractType_Text {
-			output, err := c.control.Textract.GetExtractText(ctx, job.JobId)
-			if err != nil {
-				utils.FilterError(ctx, err, "failed to get extact text by job id")
-				continue
-			}
+			allPages := false
+			allBlocks := []model.Block{}
+			var nextToken *string
 
-			if output.JobStatus == types.JobStatusSucceeded {
-				blocks := helper.OutputBlockToModel(output.Blocks)
-				doc.Blocks = blocks
-				if output.DocumentMetadata != nil {
-					doc.DocumentMetadata = &model.DocumentMetadata{
-						Pages: output.DocumentMetadata.Pages,
+			for !allPages {
+				output, err := c.control.Textract.GetExtractText(ctx, job.JobId, nextToken)
+				if err != nil {
+					utils.FilterError(ctx, err, "failed to get extact text by job id")
+					continue
+				}
+
+				if output.JobStatus == types.JobStatusSucceeded {
+					blocks := helper.OutputBlockToModel(output.Blocks)
+					allBlocks = append(allBlocks, blocks...)
+					if output.DocumentMetadata != nil {
+						doc.DocumentMetadata = &model.DocumentMetadata{
+							Pages: output.DocumentMetadata.Pages,
+						}
 					}
 				}
+				nextToken = output.NextToken
 				job.Status = string(output.JobStatus)
-			} else if output.JobStatus == types.JobStatusInProgress {
-				job.Status = string(output.JobStatus)
+				allPages = output.NextToken == nil
 			}
+			doc.Blocks = allBlocks
 		} else if doc.ExtractType == constants.ExtractType_Form {
-			output, err := c.control.Textract.GetExtractFormAndTable(ctx, job.JobId)
-			if err != nil {
-				utils.FilterError(ctx, err, "failed to get extact form & table by job id")
-				continue
-			}
+			allPages := false
+			allBlocks := []model.Block{}
+			var nextToken *string
 
-			if output.JobStatus == types.JobStatusSucceeded {
-				blocks := helper.OutputBlockToModel(output.Blocks)
-				doc.Blocks = blocks
-				if output.DocumentMetadata != nil {
-					doc.DocumentMetadata = &model.DocumentMetadata{
-						Pages: output.DocumentMetadata.Pages,
+			for !allPages {
+				output, err := c.control.Textract.GetExtractFormAndTable(ctx, job.JobId, nextToken)
+				if err != nil {
+					utils.FilterError(ctx, err, "failed to get extact text by job id")
+					continue
+				}
+
+				if output.JobStatus == types.JobStatusSucceeded {
+					blocks := helper.OutputBlockToModel(output.Blocks)
+					allBlocks = append(allBlocks, blocks...)
+					if output.DocumentMetadata != nil {
+						doc.DocumentMetadata = &model.DocumentMetadata{
+							Pages: output.DocumentMetadata.Pages,
+						}
 					}
 				}
+				nextToken = output.NextToken
 				job.Status = string(output.JobStatus)
-			} else if output.JobStatus == types.JobStatusInProgress {
-				job.Status = string(output.JobStatus)
+				allPages = output.NextToken == nil
 			}
+			doc.Blocks = allBlocks
 		} else {
 			utils.Log(ctx, "invalid document type")
 			continue
@@ -96,8 +110,16 @@ func (c *Cron) GetTextract() {
 		kvSets := helper.MapFormType(doc.Blocks)
 		doc.MappedKeyValue = kvSets
 
+		tbSets := helper.MapTableType(doc.Blocks)
+		doc.MappedTables = tbSets
+
 		if len(doc.Blocks) > 0 {
-			err = c.control.Db.UpdateOne(ctx, constants.MODEL_DOCUMENT, mQuery, bson.D{{Key: "$set", Value: bson.D{{Key: "blocks", Value: doc.Blocks}, {Key: "mappedKeyValues", Value: doc.MappedKeyValue}, {Key: "documentMetadata", Value: doc.DocumentMetadata}}}})
+			err = c.control.Db.UpdateOne(ctx, constants.MODEL_DOCUMENT, mQuery, bson.D{{Key: "$set", Value: bson.D{
+				{Key: "blocks", Value: doc.Blocks},
+				{Key: "mappedKeyValues", Value: doc.MappedKeyValue},
+				{Key: "mappedTables", Value: doc.MappedTables},
+				{Key: "documentMetadata", Value: doc.DocumentMetadata},
+			}}})
 			if err != nil {
 				utils.FilterError(ctx, err, "failed to set document block")
 				continue

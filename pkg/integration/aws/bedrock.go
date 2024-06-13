@@ -16,6 +16,11 @@ type Bedrock struct {
 	svc *bedrockruntime.Client
 }
 
+const (
+	// modelName string = "anthropic.claude-3-sonnet-20240229-v1:0"
+	modelName string = "meta.llama3-70b-instruct-v1:0"
+)
+
 func InitBedrock(aws aws.Config, region *string) *Bedrock {
 	var svc *bedrockruntime.Client
 	if region != nil {
@@ -56,12 +61,10 @@ func (b *Bedrock) SummarizeText(ctx context.Context, textToSummarize string) (*b
 	template := fmt.Sprintf(`Given a full text, give me a concise summary. Skip any preamble text and just give the summary. 
 	<document>%s</document>`, textToSummarize)
 
-	fmt.Print(template)
-
 	output, err := b.svc.Converse(ctx, &bedrockruntime.ConverseInput{
-		ModelId: aws.String("anthropic.claude-3-sonnet-20240229-v1:0"),
+		ModelId: aws.String(modelName),
 		Messages: []types.Message{
-			types.Message{
+			{
 				Content: []types.ContentBlock{
 					&types.ContentBlockMemberText{
 						Value: template,
@@ -82,16 +85,41 @@ func (b *Bedrock) SummarizeText(ctx context.Context, textToSummarize string) (*b
 	return output, nil
 }
 
-func (b *Bedrock) SummarizeForm(ctx context.Context, textToSummarize string, data any) (*bedrockruntime.ConverseOutput, error) {
-	dataString, _ := json.Marshal(data)
+func (b *Bedrock) SummarizeForm(ctx context.Context, textToSummarize string, jsonData any, tableData any) (*bedrockruntime.ConverseOutput, error) {
+	jsonStr, _ := json.Marshal(jsonData)
 	template := fmt.Sprintf(`Given a full document and form_data in json format, give me a concise summary. Skip any preamble text and just give the summary.
+	<table_format>
+	{
+		"table_id":{
+			"row_id": {
+				"column_id":"value"
+			}
+		}
+	}
+	</table_format>
 	<document>%s</document>
-	<form_data>%s</form_data>`, textToSummarize, dataString)
+	<form_data>%s</form_data>`, textToSummarize, jsonStr)
+
+	if tableData != nil {
+		tableStr, _ := json.Marshal(tableData)
+		template = fmt.Sprintf(`Given a full document and table_data with table_format explained below, give me a concise summary. Skip any preamble text and just give the summary.
+		<table_format>
+		{
+			"table_id":{
+				"row_id": {
+					"column_id":"value"
+				}
+			}
+		}
+		</table_format>
+		<document>%s</document>
+		<table_data>%s</table_data>`, textToSummarize, tableStr)
+	}
 
 	fmt.Print(template)
 
 	output, err := b.svc.Converse(ctx, &bedrockruntime.ConverseInput{
-		ModelId: aws.String("anthropic.claude-3-sonnet-20240229-v1:0"),
+		ModelId: aws.String(modelName),
 		Messages: []types.Message{
 			{
 				Content: []types.ContentBlock{

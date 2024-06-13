@@ -3,14 +3,15 @@ package model
 import "go.mongodb.org/mongo-driver/bson/primitive"
 
 type Document struct {
-	ID               primitive.ObjectID `bson:"_id"`
-	Name             string             `bson:"name"`
-	Blocks           []Block            `bson:"blocks"`
-	DocumentMetadata *DocumentMetadata  `bson:"documentMetadata"`
-	MappedKeyValue   []KeyValueSet      `bson:"mappedKeyValues"`
-	ExtractType      string             `bson:"extractType"`
-	Summary          string             `bson:"summary"`
-	BedrockResponse  any                `bson:"bedrockResponse"`
+	ID               primitive.ObjectID                `bson:"_id"`
+	Name             string                            `bson:"name"`
+	Blocks           []Block                           `bson:"blocks"`
+	DocumentMetadata *DocumentMetadata                 `bson:"documentMetadata"`
+	MappedKeyValue   []KeyValueSet                     `bson:"mappedKeyValues"`
+	MappedTables     map[string]map[int]map[int]string `bson:"mappedTables"`
+	ExtractType      string                            `bson:"extractType"`
+	Summary          string                            `bson:"summary"`
+	BedrockResponse  any                               `bson:"bedrockResponse"`
 }
 
 type DocumentMetadata struct {
@@ -23,15 +24,15 @@ type KeyValueSet struct {
 }
 
 type Block struct {
-	Id              *string        `bson:"Id"`
-	BlockType       string         `bson:"blockType"`
-	ColumnIndex     *int32         `bson:"columnIndex"`
-	ColumnSpan      *int32         `bson:"columnSpan"`
-	RowIndex        *int32         `bson:"rowIndex"`
-	RowSpan         *int32         `bson:"rowSpan"`
-	Confidence      *float32       `bson:"confidence"`
-	EntityTypes     []string       `bson:"entityTypes"`
-	Geometry        *Geometry      `bson:"geometry"`
+	Id          *string  `bson:"Id"`
+	BlockType   string   `bson:"blockType"`
+	ColumnIndex *int32   `bson:"columnIndex"`
+	ColumnSpan  *int32   `bson:"columnSpan"`
+	RowIndex    *int32   `bson:"rowIndex"`
+	RowSpan     *int32   `bson:"rowSpan"`
+	Confidence  *float32 `bson:"confidence"`
+	EntityTypes []string `bson:"entityTypes"`
+	// Geometry        *Geometry      `bson:"geometry"`
 	Page            *int32         `bson:"page"`
 	Query           *Query         `bson:"query"`
 	Relationships   []Relationship `bson:"relationships"`
