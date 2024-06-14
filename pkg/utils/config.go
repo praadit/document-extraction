@@ -33,7 +33,7 @@ func GetEnv(key, fallback string) string {
 
 func LoadEnv() (config Configuration, err error) {
 	env := GetEnv("ENV", "local")
-	godotenv.Load("../.env")
+	godotenv.Load("./../.env")
 
 	config = Configuration{
 		ServerAddr:         os.Getenv("SERVER_ADDR"),

@@ -19,11 +19,14 @@ import (
 func main() {
 	conf, _ := utils.LoadEnv()
 
+	controller.InitChromaNoContext()
+	controller.InitChromaWithContext()
+
 	controller := setupController()
 	server := pkg.NewServer(controller)
 
 	job := cronjob.InitCron(controller)
-	// runCron(job)
+	runCron(job)
 
 	if utils.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -33,9 +36,9 @@ func main() {
 
 	setupGinServer(r)
 	setupRoutes(r, server)
-	r.GET("/start-cron", func(ctx *gin.Context) {
-		job.GetTextract()
-	})
+	// r.GET("/start-cron", func(ctx *gin.Context) {
+	// 	job.GetTextract()
+	// })
 
 	if err := r.Run(conf.ServerAddr); err != nil {
 		log.Fatal("cannot run the server:", err.Error())
