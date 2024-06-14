@@ -98,6 +98,9 @@ func (c *Chroma) AddRecord(ctx context.Context, documents []ChromaDocument) erro
 }
 
 func (c *Chroma) QueryContext(ctx context.Context, query string, resCount int32) (string, error) {
+	if c.colls == nil {
+		return "", fmt.Errorf("collection are not set")
+	}
 	embedQuery, err := c.ollamaEmbed.EmbedQuery(ctx, query)
 	if err != nil {
 		return "", err

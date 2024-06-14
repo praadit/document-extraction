@@ -11,3 +11,7 @@ type ProcessResultRequest struct {
 	Key string `json:"key"`
 	Id  string `json:"id"`
 }
+
+type AskRequest struct {
+	Query string `json:"query"`
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strings"
 	constants "textract-mongo/pkg/const"
 	"textract-mongo/pkg/controller/helper"
@@ -427,20 +428,22 @@ func (c *Controller) MapTable(ctx *gin.Context) {
 
 	allBlocks := []model.Block{}
 	for _, doc := range docs {
-		if doc.ExtractType == constants.ExtractType_Form && doc.Blocks != nil && len(doc.Blocks) > 0 {
-			allBlocks = append(allBlocks, doc.Blocks...)
+		for _, block := range doc.Blocks {
+			if block.Page != nil && *block.Page == 3 {
+				allBlocks = append(allBlocks, block)
+			}
 		}
 	}
 
 	// allFormData := helper.MapFormType(allBlocks)
-	tableData := helper.MapTableType(allBlocks)
-	// textLayout := helper.MapLayoutTextType(allBlocks)
+	// tableData := helper.MapTableType(allBlocks)
+	textLayout := helper.MapLayoutTextType(allBlocks)
 
 	ctx.JSON(http.StatusOK, response.BaseResponse{
 		Data: map[string]any{
 			// "formData":  allFormData,
-			// "text": textLayout,
-			"tableData": tableData,
+			"text": textLayout,
+			// "tableData": tableData,
 		},
 	})
 }
@@ -492,35 +495,32 @@ func (c *Controller) EmbedDocument(ctx *gin.Context) {
 	if len(tableData) > 0 {
 		for tableIdx, table := range tableData {
 			if table.TableType == string(types.EntityTypeStructuredTable) {
-				// this if statement should be removed later
-				if len(chromaDocs) < 1 {
-					for rowIdx, rowContent := range table.Data {
-						rowLine := []string{}
-						for columnIdx, columnContent := range rowContent {
-							if header, ok := table.Structure[columnIdx]; ok {
-								rowLine = append(rowLine, fmt.Sprintf("%s = %s", header, columnContent))
-							}
+				for rowIdx, rowContent := range table.Data {
+					rowLine := []string{}
+					for columnIdx, columnContent := range rowContent {
+						if header, ok := table.Structure[columnIdx]; ok {
+							rowLine = append(rowLine, fmt.Sprintf("%s = %s", header, columnContent))
 						}
-
-						chromaDocs = append(chromaDocs, chroma.ChromaDocument{
-							Document:  fmt.Sprintf("%s.", strings.Join(rowLine, "; ")),
-							MetaKey:   "Table Name",
-							MetaValue: fmt.Sprintf("%s-%d:%d", table.TableType, tableIdx, rowIdx),
-						})
 					}
-				} else if table.TableType == string(types.EntityTypeSemiStructuredTable) {
-					for _, rowContent := range table.Data {
-						rowLine := []string{}
-						for _, columnContent := range rowContent {
-							rowLine = append(rowLine, columnContent)
-						}
 
-						// chromaDocs = append(chromaDocs, chroma.ChromaDocument{
-						// 	Document:  fmt.Sprintf("%s.", strings.Join(rowLine, ", ")),
-						// 	MetaKey:   "Table Name",
-						// 	MetaValue: fmt.Sprintf("%s-%d:%d", table.TableType, tableIdx, rowIdx),
-						// })
+					chromaDocs = append(chromaDocs, chroma.ChromaDocument{
+						Document:  fmt.Sprintf("%s.", strings.Join(rowLine, "; ")),
+						MetaKey:   "Table Name",
+						MetaValue: fmt.Sprintf("%s-%d:%d", table.TableType, tableIdx, rowIdx),
+					})
+				}
+			} else if table.TableType == string(types.EntityTypeSemiStructuredTable) {
+				for rowIdx, rowContent := range table.Data {
+					rowLine := []string{}
+					for _, columnContent := range rowContent {
+						rowLine = append(rowLine, columnContent)
 					}
+
+					chromaDocs = append(chromaDocs, chroma.ChromaDocument{
+						Document:  fmt.Sprintf("%s.", strings.Join(rowLine, ", ")),
+						MetaKey:   "Table Name",
+						MetaValue: fmt.Sprintf("%s-%d:%d", table.TableType, tableIdx, rowIdx),
+					})
 				}
 			}
 		}
@@ -528,16 +528,27 @@ func (c *Controller) EmbedDocument(ctx *gin.Context) {
 	textLayout := helper.MapLayoutTextType(allBlocks)
 	if len(textLayout) > 0 {
 		for _, text := range textLayout {
-			if text.Page > 2 {
-				for idx, tx := range strings.Split(text.Paragraph, ".") {
-					if len(tx) > 1 {
-						chromaDocs = append(chromaDocs, chroma.ChromaDocument{
-							Document:  tx,
-							MetaKey:   "Page",
-							MetaValue: fmt.Sprintf("page%d:%d", text.Page, idx),
-						})
-					}
+			fmt.Println(text.Paragraph)
+			pattern := `([^a-zA-Z0-9])\.`
+
+			re := regexp.MustCompile(pattern)
+			delimitedText := re.ReplaceAllString(text.Paragraph, "$1@@@")
+			splitText := strings.Split(delimitedText, "@@@")
+
+			var splitedRes []string
+			for _, str := range splitText {
+				trimmed := strings.TrimSpace(str)
+				if trimmed != "" {
+					splitedRes = append(splitedRes, trimmed)
 				}
+			}
+
+			for idx, tx := range splitedRes {
+				chromaDocs = append(chromaDocs, chroma.ChromaDocument{
+					Document:  tx,
+					MetaKey:   "Page",
+					MetaValue: fmt.Sprintf("page%d:%d", text.Page, idx),
+				})
 			}
 		}
 	}
@@ -558,5 +569,128 @@ func (c *Controller) EmbedDocument(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, response.BaseResponse{
 		Data: chromaDocs,
+	})
+}
+
+func (c *Controller) AskOllama(ctx *gin.Context) {
+	var body request.AskRequest
+	if err := ctx.Bind(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to bind request").Error(),
+		})
+		return
+	}
+
+	if err := c.chroma.SetCollection(ctx, "preview-fee-benchmark"); err != nil {
+		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to set chroma collection").Error(),
+		})
+		return
+	}
+	queryContext, err := c.chroma.QueryContext(ctx, body.Query, 10)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to query context").Error(),
+		})
+		return
+	}
+
+	answer, err := c.ollama.QueryWithContext(ctx, queryContext, body.Query)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to ask query").Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, response.BaseResponse{
+		Data: map[string]any{
+			"query":  body.Query,
+			"answer": answer,
+		},
+	})
+}
+
+func (c *Controller) AskBedrock(ctx *gin.Context) {
+	var body request.AskRequest
+	if err := ctx.Bind(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to bind request").Error(),
+		})
+		return
+	}
+
+	if err := c.chroma.SetCollection(ctx, "preview-fee-benchmark"); err != nil {
+		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to set chroma collection").Error(),
+		})
+		return
+	}
+	queryContext, err := c.chroma.QueryContext(ctx, body.Query, 10)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to query context").Error(),
+		})
+		return
+	}
+
+	sum, err := c.bedrock.QueryWithContext(ctx, queryContext, body.Query)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to summarize form document").Error(),
+		})
+		return
+	}
+
+	answer := ""
+	sums, err := helper.GetResponseOfBedrockConverseOutput(sum)
+	if err == nil {
+		answer = strings.Join(sums, ". ")
+	}
+
+	ctx.JSON(http.StatusOK, response.BaseResponse{
+		Data: map[string]any{
+			"query":  body.Query,
+			"answer": answer,
+		},
+	})
+}
+
+func (c *Controller) AskNoContext(ctx *gin.Context) {
+	var body request.AskRequest
+	if err := ctx.Bind(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to bind request").Error(),
+		})
+		return
+	}
+
+	// answer, err := c.ollama.QueryWithContext(ctx, "", body.Query)
+	// if err != nil {
+	// 	ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+	// 		Message: utils.FilterError(ctx, err, "failed to ask query").Error(),
+	// 	})
+	// 	return
+	// }
+
+	sum, err := c.bedrock.QueryWithContext(ctx, "", body.Query)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to summarize form document").Error(),
+		})
+		return
+	}
+
+	answer := ""
+	sums, err := helper.GetResponseOfBedrockConverseOutput(sum)
+	if err == nil {
+		answer = strings.Join(sums, ". ")
+	}
+
+	ctx.JSON(http.StatusOK, response.BaseResponse{
+		Data: map[string]any{
+			"query":  body.Query,
+			"answer": answer,
+		},
 	})
 }

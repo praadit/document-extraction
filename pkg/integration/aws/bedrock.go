@@ -162,3 +162,29 @@ func (b *Bedrock) LangchainSummarizeForm(ctx context.Context, textToSummarize st
 
 	return completion, nil
 }
+func (b *Bedrock) QueryWithContext(ctx context.Context, queryContext string, query string) (*bedrockruntime.ConverseOutput, error) {
+	prompt := fmt.Sprintf("Context: %s\n\nQuesting: %s\n\nAnswer: ", queryContext, query)
+
+	output, err := b.svc.Converse(ctx, &bedrockruntime.ConverseInput{
+		ModelId: aws.String(modelName),
+		Messages: []types.Message{
+			{
+				Content: []types.ContentBlock{
+					&types.ContentBlockMemberText{
+						Value: prompt,
+					},
+				},
+				Role: types.ConversationRoleUser,
+			},
+		},
+		InferenceConfig: &types.InferenceConfiguration{
+			MaxTokens:   aws.Int32(2048),
+			Temperature: aws.Float32(0.8),
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return output, nil
+}

@@ -89,4 +89,7 @@ func setupRoutes(r *gin.Engine, server *pkg.Server) {
 	r.POST("/bedrock-process", server.Controller.BedrockSummarizeDocument)
 	r.POST("/map", server.Controller.MapTable)
 	r.POST("/embed", server.Controller.EmbedDocument)
+	r.POST("/ask-ollama", server.Controller.AskOllama)
+	r.POST("/ask-bedrock", server.Controller.AskBedrock)
+	r.POST("/ask-no-context", server.Controller.AskNoContext)
 }

@@ -300,6 +300,7 @@ func MapLayoutTextType(blocks []model.Block) []model.PageParagraph {
 											if line, ok := blockMap[textLayChild]; ok {
 												if line.BlockType == string(types.BlockTypeLine) && !utils.Contains(ignoredText, *line.Id) {
 													paragraph = append(paragraph, *line.Text)
+													ignoredText = append(ignoredText, *line.Id)
 												}
 											}
 										}
