@@ -9,6 +9,7 @@ import (
 	"textract-mongo/pkg/controller/helper"
 	"textract-mongo/pkg/dto/request"
 	"textract-mongo/pkg/dto/response"
+	"textract-mongo/pkg/integration/chroma"
 	"textract-mongo/pkg/model"
 	"textract-mongo/pkg/repo"
 	"textract-mongo/pkg/utils"
@@ -441,5 +442,121 @@ func (c *Controller) MapTable(ctx *gin.Context) {
 			// "text": textLayout,
 			"tableData": tableData,
 		},
+	})
+}
+
+func (c *Controller) EmbedDocument(ctx *gin.Context) {
+	var body request.ProcessResultRequest
+	if err := ctx.Bind(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to bind request").Error(),
+		})
+		return
+	}
+
+	var mQuery bson.M
+	if len(body.Id) > 0 {
+		id, err := primitive.ObjectIDFromHex(body.Id)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+				Message: utils.FilterError(ctx, err, "failed to parse id").Error(),
+			})
+			return
+		}
+		mQuery = bson.M{"_id": id}
+	} else if len(body.Key) > 0 {
+		mQuery = bson.M{"name": bson.M{"$regex": fmt.Sprintf("%s*", body.Key), "$options": ""}}
+	} else {
+		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+			Message: "please fil the document identifier",
+		})
+		return
+	}
+
+	docs, err := repo.Find[model.Document](ctx, c.Db, constants.MODEL_DOCUMENT, mQuery)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to get document").Error(),
+		})
+		return
+	}
+
+	allBlocks := []model.Block{}
+	for _, doc := range docs {
+		allBlocks = append(allBlocks, doc.Blocks...)
+	}
+
+	// allFormData := helper.MapFormType(allBlocks)
+	chromaDocs := []chroma.ChromaDocument{}
+	tableData := helper.MapTableType(allBlocks)
+	if len(tableData) > 0 {
+		for tableIdx, table := range tableData {
+			if table.TableType == string(types.EntityTypeStructuredTable) {
+				// this if statement should be removed later
+				if len(chromaDocs) < 1 {
+					for rowIdx, rowContent := range table.Data {
+						rowLine := []string{}
+						for columnIdx, columnContent := range rowContent {
+							if header, ok := table.Structure[columnIdx]; ok {
+								rowLine = append(rowLine, fmt.Sprintf("%s = %s", header, columnContent))
+							}
+						}
+
+						chromaDocs = append(chromaDocs, chroma.ChromaDocument{
+							Document:  fmt.Sprintf("%s.", strings.Join(rowLine, "; ")),
+							MetaKey:   "Table Name",
+							MetaValue: fmt.Sprintf("%s-%d:%d", table.TableType, tableIdx, rowIdx),
+						})
+					}
+				} else if table.TableType == string(types.EntityTypeSemiStructuredTable) {
+					for _, rowContent := range table.Data {
+						rowLine := []string{}
+						for _, columnContent := range rowContent {
+							rowLine = append(rowLine, columnContent)
+						}
+
+						// chromaDocs = append(chromaDocs, chroma.ChromaDocument{
+						// 	Document:  fmt.Sprintf("%s.", strings.Join(rowLine, ", ")),
+						// 	MetaKey:   "Table Name",
+						// 	MetaValue: fmt.Sprintf("%s-%d:%d", table.TableType, tableIdx, rowIdx),
+						// })
+					}
+				}
+			}
+		}
+	}
+	textLayout := helper.MapLayoutTextType(allBlocks)
+	if len(textLayout) > 0 {
+		for _, text := range textLayout {
+			if text.Page > 2 {
+				for idx, tx := range strings.Split(text.Paragraph, ".") {
+					if len(tx) > 1 {
+						chromaDocs = append(chromaDocs, chroma.ChromaDocument{
+							Document:  tx,
+							MetaKey:   "Page",
+							MetaValue: fmt.Sprintf("page%d:%d", text.Page, idx),
+						})
+					}
+				}
+			}
+		}
+	}
+
+	if err := c.chroma.SetCollection(ctx, "preview-fee-benchmark"); err != nil {
+		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to set chroma collection").Error(),
+		})
+		return
+	}
+
+	if err := c.chroma.AddRecord(ctx, chromaDocs); err != nil {
+		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to add chroma record").Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, response.BaseResponse{
+		Data: chromaDocs,
 	})
 }

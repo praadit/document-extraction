@@ -7,6 +7,7 @@ import (
 	"textract-mongo/pkg/controller"
 	"textract-mongo/pkg/cronjob"
 	"textract-mongo/pkg/integration/aws"
+	"textract-mongo/pkg/integration/chroma"
 	"textract-mongo/pkg/integration/ollama"
 	"textract-mongo/pkg/repo"
 	"textract-mongo/pkg/utils"
@@ -19,10 +20,7 @@ import (
 func main() {
 	conf, _ := utils.LoadEnv()
 
-	controller.InitChromaNoContext()
-	controller.InitChromaWithContext()
-
-	controller := setupController()
+	controller := setupController(conf)
 	server := pkg.NewServer(controller)
 
 	job := cronjob.InitCron(controller)
@@ -45,7 +43,7 @@ func main() {
 	}
 }
 
-func setupController() *controller.Controller {
+func setupController(conf utils.Configuration) *controller.Controller {
 	// controller.InitChroma()
 	customProvider := aws.AwsCredentialProvider{}
 
@@ -62,10 +60,12 @@ func setupController() *controller.Controller {
 	tract := aws.InitTextract(awsConfig)
 	s3 := aws.InitS3(awsConfig)
 	bed := aws.InitBedrock(awsConfig, &utils.Config.AwsBedrockRegion)
+	chroma := chroma.InitChroma(conf.ChromaAddress, conf.LlmAddress)
+
 	ollama := ollama.InitOllama()
 	db := repo.InitDatabase(utils.Config.MongoConn, utils.Config.MongoDbName)
 
-	return controller.NewController(db, s3, tract, bed, ollama)
+	return controller.NewController(db, s3, tract, bed, ollama, chroma)
 }
 
 func runCron(job *cronjob.Cron) {
@@ -88,4 +88,5 @@ func setupRoutes(r *gin.Engine, server *pkg.Server) {
 	r.POST("/process", server.Controller.SummarizeDocument)
 	r.POST("/bedrock-process", server.Controller.BedrockSummarizeDocument)
 	r.POST("/map", server.Controller.MapTable)
+	r.POST("/embed", server.Controller.EmbedDocument)
 }

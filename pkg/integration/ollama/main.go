@@ -22,7 +22,7 @@ const (
 func InitOllama() *Ollama {
 	llm, err := ollama.New(ollama.WithModel(model))
 	if err != nil {
-		log.Fatal(err)
+		log.Panic("failed to init ollama, err :" + err.Error())
 	}
 
 	return &Ollama{
@@ -72,6 +72,22 @@ func (o *Ollama) ClassifyDocument(ctx context.Context, textToSummarize string) (
 
 	completion, err := o.svc.Call(ctx, template,
 		llms.WithTemperature(temperature),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return completion, nil
+}
+func (o *Ollama) QueryWithContext(ctx context.Context, queryContext string, query string) (string, error) {
+	prompt := fmt.Sprintf("Context: %s\n\nQuesting: %s\n\nAnswer: ", queryContext, query)
+
+	completion, err := o.svc.Call(ctx, prompt,
+		llms.WithTemperature(0.8),
+		// llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
+		// 	fmt.Print(string(chunk))
+		// 	return nil
+		// }),
 	)
 	if err != nil {
 		return "", err

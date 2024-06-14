@@ -8,7 +8,7 @@ import (
 )
 
 type Configuration struct {
-	ServerAddr         string
+	ServerAddr         string `mapstructure:"SERVER_ADDR"`
 	MongoConn          string `mapstructure:"MONGO_CONN"`
 	MongoDbName        string `mapstructure:"MONGO_DB_NAME"`
 	AwsS3Bucket        string `mapstructure:"AWS_S3BUCKET"`
@@ -16,6 +16,8 @@ type Configuration struct {
 	AwsBedrockRegion   string `mapstructure:"AWS_BEDROCK_REGION"`
 	AwsAccessKeyID     string `mapstructure:"AWS_ACCESS_KEY_ID"`
 	AwsSecretAccessKey string `mapstructure:"AWS_SECRET_ACCESS_KEY"`
+	ChromaAddress      string `mapstructure:"CHROMA_ADDRESS"`
+	LlmAddress         string `mapstructure:"LLM_ADDRESS"`
 }
 
 var Env string
@@ -44,6 +46,8 @@ func LoadEnv() (config Configuration, err error) {
 		AwsBedrockRegion:   os.Getenv("AWS_BEDROCK_REGION"),
 		AwsAccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
 		AwsSecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		ChromaAddress:      os.Getenv("CHROMA_ADDRESS"),
+		LlmAddress:         os.Getenv("LLM_ADDRESS"),
 	}
 
 	Env = env
