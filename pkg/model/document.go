@@ -3,19 +3,31 @@ package model
 import "go.mongodb.org/mongo-driver/bson/primitive"
 
 type Document struct {
-	ID               primitive.ObjectID                `bson:"_id"`
-	Name             string                            `bson:"name"`
-	Blocks           []Block                           `bson:"blocks"`
-	DocumentMetadata *DocumentMetadata                 `bson:"documentMetadata"`
-	MappedKeyValue   []KeyValueSet                     `bson:"mappedKeyValues"`
-	MappedTables     map[string]map[int]map[int]string `bson:"mappedTables"`
-	ExtractType      string                            `bson:"extractType"`
-	Summary          string                            `bson:"summary"`
-	BedrockResponse  any                               `bson:"bedrockResponse"`
+	ID               primitive.ObjectID `bson:"_id"`
+	Name             string             `bson:"name"`
+	Blocks           []Block            `bson:"blocks"`
+	DocumentMetadata *DocumentMetadata  `bson:"documentMetadata"`
+	MappedKeyValue   []KeyValueSet      `bson:"mappedKeyValues"`
+	MappedTables     []TableData        `bson:"mappedTables"`
+	ExtractType      string             `bson:"extractType"`
+	Summary          string             `bson:"summary"`
+	BedrockResponse  any                `bson:"bedrockResponse"`
 }
 
 type DocumentMetadata struct {
 	Pages *int32 `bson:"pages"`
+}
+
+type TableData struct {
+	Page      int                    `bson:"page"`
+	TableType string                 `bson:"tableType"`
+	Structure map[int]string         `bson:"tableStructure"`
+	Data      map[int]map[int]string `bson:"tableData"`
+}
+
+type PageParagraph struct {
+	Page      int    `bson:"page"`
+	Paragraph string `bson:"paragraph"`
 }
 
 type KeyValueSet struct {

@@ -13,7 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/gin-gonic/gin"
-	"github.com/robfig/cron"
+	"github.com/jasonlvhit/gocron"
 )
 
 func main() {
@@ -23,7 +23,7 @@ func main() {
 	server := pkg.NewServer(controller)
 
 	job := cronjob.InitCron(controller)
-	runCron(job)
+	// runCron(job)
 
 	if utils.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
@@ -33,9 +33,9 @@ func main() {
 
 	setupGinServer(r)
 	setupRoutes(r, server)
-	// r.GET("/start-cron", func(ctx *gin.Context) {
-	// 	job.GetTextract()
-	// })
+	r.GET("/start-cron", func(ctx *gin.Context) {
+		job.GetTextract()
+	})
 
 	if err := r.Run(conf.ServerAddr); err != nil {
 		log.Fatal("cannot run the server:", err.Error())
@@ -66,10 +66,10 @@ func setupController() *controller.Controller {
 }
 
 func runCron(job *cronjob.Cron) {
-	cron := cron.New()
-	cron.AddFunc("*/10 * * * *", job.GetTextract)
+	s := gocron.NewScheduler()
 
-	cron.Start()
+	s.Every(10).Minute().Do(job.GetTextract)
+	s.Start()
 }
 
 func setupGinServer(r *gin.Engine) {

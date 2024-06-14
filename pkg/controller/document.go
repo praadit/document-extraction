@@ -10,6 +10,7 @@ import (
 	"textract-mongo/pkg/dto/request"
 	"textract-mongo/pkg/dto/response"
 	"textract-mongo/pkg/model"
+	"textract-mongo/pkg/repo"
 	"textract-mongo/pkg/utils"
 
 	"github.com/aws/aws-sdk-go-v2/service/textract/types"
@@ -110,8 +111,8 @@ func (c *Controller) ExtractDocument(ctx *gin.Context) {
 	kvSets := helper.MapFormType(doc.Blocks)
 	doc.MappedKeyValue = kvSets
 
-	tbSets := helper.MapTableType(doc.Blocks)
-	doc.MappedTables = tbSets
+	tableData := helper.MapTableType(doc.Blocks)
+	doc.MappedTables = tableData
 
 	err := c.Db.InsertOne(ctx, constants.MODEL_DOCUMENT, doc)
 	if err != nil {
@@ -345,45 +346,35 @@ func (c *Controller) BedrockSummarizeDocument(ctx *gin.Context) {
 		}
 	}
 
+	var jsonData any = nil
+	var tableData *model.TableData = nil
+	if doc.ExtractType == constants.ExtractType_Form && doc.Blocks != nil && len(doc.Blocks) > 0 {
+		kvSets := helper.MapFormType(doc.Blocks)
+		if kvSets != nil && len(kvSets) > 0 {
+			jsonData = kvSets
+		}
+
+		tableData := helper.MapTableType(doc.Blocks)
+		doc.MappedTables = tableData
+	}
+
+	sum, err := c.bedrock.Summarize(ctx, textToSummarize, jsonData, tableData)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
+			Message: utils.FilterError(ctx, err, "failed to summarize form document").Error(),
+		})
+		return
+	}
+
 	summary := ""
-	var bedrockOutput any
-	if doc.ExtractType == constants.ExtractType_Form {
-		var tableData any = nil
-		if doc.MappedTables != nil && len(doc.MappedTables) > 0 {
-			tableData = doc.MappedTables
-		}
-		sum, err := c.bedrock.SummarizeForm(ctx, textToSummarize, doc.MappedKeyValue, tableData)
-		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
-				Message: utils.FilterError(ctx, err, "failed to summarize form document").Error(),
-			})
-			return
-		}
-
-		bedrockOutput = sum
-		sums, err := helper.GetResponseOfBedrockConverseOutput(sum)
-		if err == nil {
-			summary = strings.Join(sums, ". ")
-		}
-	} else if doc.ExtractType == constants.ExtractType_Text {
-		sum, err := c.bedrock.SummarizeText(ctx, textToSummarize)
-		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
-				Message: utils.FilterError(ctx, err, "failed to summarize form document").Error(),
-			})
-			return
-		}
-
-		bedrockOutput = sum
-		sums, err := helper.GetResponseOfBedrockConverseOutput(sum)
-		if err == nil {
-			summary = strings.Join(sums, ". ")
-		}
+	sums, err := helper.GetResponseOfBedrockConverseOutput(sum)
+	if err == nil {
+		summary = strings.Join(sums, ". ")
 	}
 
 	err = c.Db.UpdateOne(ctx, constants.MODEL_DOCUMENT, mQuery, bson.D{{Key: "$set", Value: bson.D{
 		{Key: "summary", Value: summary},
-		{Key: "bedrockResponse", Value: bedrockOutput},
+		{Key: "bedrockResponse", Value: sum},
 	}}})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
@@ -417,7 +408,7 @@ func (c *Controller) MapTable(ctx *gin.Context) {
 		}
 		mQuery = bson.M{"_id": id}
 	} else if len(body.Key) > 0 {
-		mQuery = bson.M{"name": body.Key}
+		mQuery = bson.M{"name": bson.M{"$regex": fmt.Sprintf("%s*", body.Key), "$options": ""}}
 	} else {
 		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
 			Message: "please fil the document identifier",
@@ -425,8 +416,7 @@ func (c *Controller) MapTable(ctx *gin.Context) {
 		return
 	}
 
-	doc := model.Document{}
-	err := c.Db.FindOne(ctx, constants.MODEL_DOCUMENT, mQuery, &doc)
+	docs, err := repo.Find[model.Document](ctx, c.Db, constants.MODEL_DOCUMENT, mQuery)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, response.BaseResponse{
 			Message: utils.FilterError(ctx, err, "failed to get document").Error(),
@@ -434,20 +424,22 @@ func (c *Controller) MapTable(ctx *gin.Context) {
 		return
 	}
 
-	tables := helper.MapTableType(doc.Blocks)
-
-	for tableId, table := range tables {
-		fmt.Printf("Table : %s\n", tableId)
-		for _, row := range table {
-			for _, cell := range row {
-				fmt.Printf("%s	| ", cell)
-			}
-			fmt.Println()
+	allBlocks := []model.Block{}
+	for _, doc := range docs {
+		if doc.ExtractType == constants.ExtractType_Form && doc.Blocks != nil && len(doc.Blocks) > 0 {
+			allBlocks = append(allBlocks, doc.Blocks...)
 		}
-		fmt.Println()
 	}
 
+	// allFormData := helper.MapFormType(allBlocks)
+	tableData := helper.MapTableType(allBlocks)
+	// textLayout := helper.MapLayoutTextType(allBlocks)
+
 	ctx.JSON(http.StatusOK, response.BaseResponse{
-		Data: tables,
+		Data: map[string]any{
+			// "formData":  allFormData,
+			// "text": textLayout,
+			"tableData": tableData,
+		},
 	})
 }

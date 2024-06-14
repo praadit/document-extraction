@@ -16,72 +16,6 @@ type RawKeySet struct {
 	ValueIds []string
 }
 
-func MapFormType(blocks []model.Block) []model.KeyValueSet {
-	words := map[string]string{}
-	for _, block := range blocks {
-		if block.BlockType == string(types.BlockTypeWord) && block.Id != nil && block.Text != nil && len(*block.Id) > 0 && len(*block.Text) > 0 {
-			words[*block.Id] = *block.Text
-		}
-	}
-
-	keyValueSet := []model.KeyValueSet{}
-
-	keySet := map[string]RawKeySet{}
-	valueSet := map[string][]string{}
-	for _, block := range blocks {
-		if block.BlockType == string(types.BlockTypeKeyValueSet) && block.Id != nil {
-			if utils.Contains(block.EntityTypes, string(types.EntityTypeKey)) {
-				keyChild := []string{}
-				keyValueIds := []string{}
-				for _, relation := range block.Relationships {
-					if relation.Type == string(types.RelationshipTypeChild) {
-						for _, child := range relation.Ids {
-							if val, ok := words[child]; ok {
-								keyChild = append(keyChild, val)
-							}
-						}
-					} else if relation.Type == string(types.RelationshipTypeValue) {
-						keyValueIds = append(keyValueIds, relation.Ids...)
-					}
-				}
-				keySet[*block.Id] = RawKeySet{
-					Key:      strings.Join(keyChild, " "),
-					Child:    keyChild,
-					ValueIds: keyValueIds,
-				}
-			} else if utils.Contains(block.EntityTypes, string(types.EntityTypeValue)) {
-				valueChild := []string{}
-				for _, relation := range block.Relationships {
-					if relation.Type == string(types.RelationshipTypeChild) {
-						for _, child := range relation.Ids {
-							if val, ok := words[child]; ok {
-								valueChild = append(valueChild, val)
-							}
-						}
-					}
-				}
-				valueSet[*block.Id] = valueChild
-			}
-		}
-	}
-
-	for _, key := range keySet {
-		kvSet := model.KeyValueSet{
-			Key: key.Key,
-		}
-		vals := []string{}
-		for _, val := range key.ValueIds {
-			if val, ok := valueSet[val]; ok {
-				vals = append(vals, val...)
-			}
-		}
-		kvSet.Value = strings.Join(vals, " ")
-		keyValueSet = append(keyValueSet, kvSet)
-	}
-
-	return keyValueSet
-}
-
 func OutputBlockToModel(blocks []types.Block) []model.Block {
 	blockModels := []model.Block{}
 
@@ -190,7 +124,7 @@ func GetResponseOfBedrockConverseOutput(converseOutput *bedrockruntime.ConverseO
 	return result, nil
 }
 
-func MapTableType(blocks []model.Block) map[string]map[int]map[int]string {
+func MapTableType(blocks []model.Block) []model.TableData {
 	cells := map[string]model.Block{}
 	words := map[string]string{}
 	for _, block := range blocks {
@@ -202,18 +136,20 @@ func MapTableType(blocks []model.Block) map[string]map[int]map[int]string {
 		}
 	}
 
-	tables := map[string]map[int]map[int]string{}
+	// tables := map[string]map[int]map[int]string{}
+	// tableStructure := map[string]map[int]string{}
+
+	modelTable := []model.TableData{}
+
 	for _, block := range blocks {
 		if block.BlockType == string(types.BlockTypeTable) {
 			// fmt.Printf("Table detected: %d\n", block.Id)
 			table := map[int]map[int]string{}
+			structure := map[int]string{}
 			for _, rel := range block.Relationships {
 				if rel.Type == string(types.RelationshipTypeChild) {
 					for _, child := range rel.Ids {
 						if cell, ok := cells[child]; ok {
-							if _, ok := table[int(*cell.RowIndex)]; !ok {
-								table[int(*cell.RowIndex)] = map[int]string{}
-							}
 
 							// if cell.RowIndex != nil && cell.ColumnIndex != nil {
 							// 	fmt.Printf("Cell %d-%d:\n", *cell.RowIndex, *cell.ColumnIndex)
@@ -229,16 +165,162 @@ func MapTableType(blocks []model.Block) map[string]map[int]map[int]string {
 								}
 							}
 							// fmt.Printf("%s\n", strings.Join(line, " "))
+
 							if cell.RowIndex != nil && cell.ColumnIndex != nil {
-								table[int(*cell.RowIndex)][int(*cell.ColumnIndex)] = strings.Join(line, " ")
+								if utils.Contains(cell.EntityTypes, string(types.EntityTypeColumnHeader)) && utils.Contains(block.EntityTypes, string(types.EntityTypeStructuredTable)) {
+									structure[int(*cell.ColumnIndex)] = strings.Join(line, " ")
+								} else {
+									if _, ok := table[int(*cell.RowIndex)]; !ok {
+										table[int(*cell.RowIndex)] = map[int]string{}
+									}
+									table[int(*cell.RowIndex)][int(*cell.ColumnIndex)] = strings.Join(line, " ")
+								}
 							}
 						}
 					}
 				}
 			}
-			tables[*block.Id] = table
+			page := 0
+			if block.Page != nil {
+				page = int(*block.Page)
+			}
+			tableType := types.EntityTypeStructuredTable
+			if len(structure) < 1 {
+				tableType = types.EntityTypeSemiStructuredTable
+			}
+			modelTable = append(modelTable, model.TableData{
+				Data:      table,
+				Structure: structure,
+				Page:      page,
+				TableType: string(tableType),
+			})
+			// tables[*block.Id] = table
+			// tableStructure[*block.Id] = structure
 		}
 	}
 
-	return tables
+	return modelTable
+}
+func MapFormType(blocks []model.Block) []model.KeyValueSet {
+	words := map[string]string{}
+	for _, block := range blocks {
+		if block.BlockType == string(types.BlockTypeWord) && block.Id != nil && block.Text != nil && len(*block.Id) > 0 && len(*block.Text) > 0 {
+			words[*block.Id] = *block.Text
+		}
+	}
+
+	keyValueSet := []model.KeyValueSet{}
+
+	keySet := map[string]RawKeySet{}
+	valueSet := map[string][]string{}
+	for _, block := range blocks {
+		if block.BlockType == string(types.BlockTypeKeyValueSet) && block.Id != nil {
+			if utils.Contains(block.EntityTypes, string(types.EntityTypeKey)) {
+				keyChild := []string{}
+				keyValueIds := []string{}
+				for _, relation := range block.Relationships {
+					if relation.Type == string(types.RelationshipTypeChild) {
+						for _, child := range relation.Ids {
+							if val, ok := words[child]; ok {
+								keyChild = append(keyChild, val)
+							}
+						}
+					} else if relation.Type == string(types.RelationshipTypeValue) {
+						keyValueIds = append(keyValueIds, relation.Ids...)
+					}
+				}
+				keySet[*block.Id] = RawKeySet{
+					Key:      strings.Join(keyChild, " "),
+					Child:    keyChild,
+					ValueIds: keyValueIds,
+				}
+			} else if utils.Contains(block.EntityTypes, string(types.EntityTypeValue)) {
+				valueChild := []string{}
+				for _, relation := range block.Relationships {
+					if relation.Type == string(types.RelationshipTypeChild) {
+						for _, child := range relation.Ids {
+							if val, ok := words[child]; ok {
+								valueChild = append(valueChild, val)
+							}
+						}
+					}
+				}
+				valueSet[*block.Id] = valueChild
+			}
+		}
+	}
+
+	for _, key := range keySet {
+		kvSet := model.KeyValueSet{
+			Key: key.Key,
+		}
+		vals := []string{}
+		for _, val := range key.ValueIds {
+			if val, ok := valueSet[val]; ok {
+				vals = append(vals, val...)
+			}
+		}
+		kvSet.Value = strings.Join(vals, " ")
+		keyValueSet = append(keyValueSet, kvSet)
+	}
+
+	return keyValueSet
+}
+func MapLayoutTextType(blocks []model.Block) []model.PageParagraph {
+	blockMap := map[string]model.Block{}
+	for _, block := range blocks {
+		if block.BlockType == string(types.BlockTypeLine) || block.BlockType == string(types.BlockTypeLayoutText) {
+			blockMap[*block.Id] = block
+		}
+	}
+
+	ignoredText := []string{}
+	for _, block := range blocks {
+		if block.BlockType == string(types.BlockTypeLayoutTable) {
+			for _, rel := range block.Relationships {
+				if rel.Type == string(types.RelationshipTypeChild) {
+					ignoredText = append(ignoredText, rel.Ids...)
+				}
+			}
+		}
+	}
+
+	layoutTextMap := []model.PageParagraph{}
+	for _, block := range blocks {
+		if block.BlockType == string(types.BlockTypePage) && block.Id != nil {
+			paragraph := []string{}
+			for _, pageRel := range block.Relationships {
+				if pageRel.Type == string(types.RelationshipTypeChild) {
+					for _, pageChild := range pageRel.Ids {
+						if textLay, ok := blockMap[pageChild]; ok {
+							if textLay.BlockType == string(types.BlockTypeLayoutText) {
+								for _, texLayRel := range block.Relationships {
+									if texLayRel.Type == string(types.RelationshipTypeChild) {
+										for _, textLayChild := range texLayRel.Ids {
+											if line, ok := blockMap[textLayChild]; ok {
+												if line.BlockType == string(types.BlockTypeLine) && !utils.Contains(ignoredText, *line.Id) {
+													paragraph = append(paragraph, *line.Text)
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			if len(paragraph) > 0 {
+				page := 0
+				if block.Page != nil {
+					page = int(*block.Page)
+				}
+				layoutTextMap = append(layoutTextMap, model.PageParagraph{
+					Page:      page,
+					Paragraph: strings.Join(paragraph, " "),
+				})
+			}
+		}
+	}
+	return layoutTextMap
 }

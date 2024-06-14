@@ -10,6 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
+	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/llms/bedrock"
 )
 
 type Bedrock struct {
@@ -57,48 +59,25 @@ type BedrockResponse struct {
 	Completion string `json:"completion"`
 }
 
-func (b *Bedrock) SummarizeText(ctx context.Context, textToSummarize string) (*bedrockruntime.ConverseOutput, error) {
+func (b *Bedrock) Summarize(ctx context.Context, textToSummarize string, jsonData any, tableData any) (*bedrockruntime.ConverseOutput, error) {
 	template := fmt.Sprintf(`Given a full text, give me a concise summary. Skip any preamble text and just give the summary. 
 	<document>%s</document>`, textToSummarize)
 
-	output, err := b.svc.Converse(ctx, &bedrockruntime.ConverseInput{
-		ModelId: aws.String(modelName),
-		Messages: []types.Message{
-			{
-				Content: []types.ContentBlock{
-					&types.ContentBlockMemberText{
-						Value: template,
-					},
-				},
-				Role: types.ConversationRoleUser,
-			},
-		},
-		InferenceConfig: &types.InferenceConfiguration{
-			MaxTokens:   aws.Int32(2048),
-			Temperature: aws.Float32(0.8),
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return output, nil
-}
-
-func (b *Bedrock) SummarizeForm(ctx context.Context, textToSummarize string, jsonData any, tableData any) (*bedrockruntime.ConverseOutput, error) {
-	jsonStr, _ := json.Marshal(jsonData)
-	template := fmt.Sprintf(`Given a full document and form_data in json format, give me a concise summary. Skip any preamble text and just give the summary.
-	<table_format>
-	{
-		"table_id":{
-			"row_id": {
-				"column_id":"value"
+	if jsonData != nil {
+		jsonStr, _ := json.Marshal(jsonData)
+		template = fmt.Sprintf(`Given a full document and form_data in json format, give me a concise summary. Skip any preamble text and just give the summary.
+		<table_format>
+		{
+			"table_id":{
+				"row_id": {
+					"column_id":"value"
+				}
 			}
 		}
+		</table_format>
+		<document>%s</document>
+		<form_data>%s</form_data>`, textToSummarize, jsonStr)
 	}
-	</table_format>
-	<document>%s</document>
-	<form_data>%s</form_data>`, textToSummarize, jsonStr)
 
 	if tableData != nil {
 		tableStr, _ := json.Marshal(tableData)
@@ -140,4 +119,46 @@ func (b *Bedrock) SummarizeForm(ctx context.Context, textToSummarize string, jso
 	}
 
 	return output, nil
+}
+
+func (b *Bedrock) LangchainSummarizeForm(ctx context.Context, textToSummarize string, jsonData any, tableData any) (string, error) {
+	llm, err := bedrock.New(bedrock.WithClient(b.svc))
+	if err != nil {
+		return "", nil
+	}
+
+	template := fmt.Sprintf(`Given a full document, give me a concise summary. Skip any preamble text and just give the summary.
+	<document>%s</document>`, textToSummarize)
+
+	if jsonData != nil {
+		jsonStr, _ := json.Marshal(jsonData)
+		template = fmt.Sprintf(`Given a full document and form_data in json format, give me a concise summary. Skip any preamble text and just give the summary.
+		<document>%s</document>
+		<form_data>%s</form_data>`, textToSummarize, jsonStr)
+	}
+
+	if tableData != nil {
+		tableStr, _ := json.Marshal(tableData)
+		template = fmt.Sprintf(`Given a full document and table_data with table_format explained below, give me a concise summary. Skip any preamble text and just give the summary.
+		<table_format>
+		{
+			"table_id":{
+				"row_id": {
+					"column_id":"value"
+				}
+			}
+		}
+		</table_format>
+		<document>%s</document>
+		<table_data>%s</table_data>`, textToSummarize, tableStr)
+	}
+
+	// fmt.Print(template)
+
+	completion, err := llms.GenerateFromSinglePrompt(ctx, llm, template)
+	if err != nil {
+		return "", err
+	}
+
+	return completion, nil
 }
