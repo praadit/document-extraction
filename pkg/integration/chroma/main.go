@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	model string = "llama3"
+	model string = "mxbai-embed-large"
 )
 
 type Chroma struct {
@@ -24,8 +24,7 @@ type Chroma struct {
 
 type ChromaDocument struct {
 	Document  string
-	MetaKey   string
-	MetaValue any
+	Metadatas map[string]any
 }
 
 func InitChroma(chromaAddress string, llmAddress string) *Chroma {
@@ -38,6 +37,7 @@ func InitChroma(chromaAddress string, llmAddress string) *Chroma {
 	if err != nil {
 		log.Panic("failed to init ollama embeding to chroma, err :" + err.Error())
 	}
+	client.DeleteCollection(context.Background(), "preview-fee-benchmark")
 
 	return &Chroma{
 		svc:         client,
@@ -72,18 +72,30 @@ func (c *Chroma) AddRecord(ctx context.Context, documents []ChromaDocument) erro
 	if c.colls == nil {
 		return fmt.Errorf("collection are not set")
 	}
+
+	startCount, _ := c.colls.Count(ctx)
+
 	rs, err := types.NewRecordSet(
 		types.WithEmbeddingFunction(c.ollamaEmbed),
-		types.WithIDGenerator(types.NewULIDGenerator()),
+		types.WithIDGenerator(types.NewUUIDGenerator()),
 	)
 	if err != nil {
 		return err
 	}
 
 	for _, doc := range documents {
-		rs.WithRecord(types.WithDocument(doc.Document), types.WithMetadata(doc.MetaKey, doc.MetaValue))
-	}
+		recTypes := []types.Option{}
 
+		for k, v := range doc.Metadatas {
+			recTypes = append(recTypes, types.WithMetadata(k, v))
+		}
+		embed, err := c.ollamaEmbed.EmbedQuery(ctx, doc.Document)
+		if err != nil {
+			continue
+		}
+		recTypes = append(recTypes, types.WithDocument(embed.String()))
+		rs.WithRecord(recTypes...)
+	}
 	_, err = rs.BuildAndValidate(ctx)
 	if err != nil {
 		return err
@@ -94,6 +106,9 @@ func (c *Chroma) AddRecord(ctx context.Context, documents []ChromaDocument) erro
 		return err
 	}
 
+	endCount, _ := c.colls.Count(ctx)
+	fmt.Printf("succesfully add %d records\n", endCount-startCount)
+
 	return nil
 }
 
@@ -101,6 +116,10 @@ func (c *Chroma) QueryContext(ctx context.Context, query string, resCount int32)
 	if c.colls == nil {
 		return "", fmt.Errorf("collection are not set")
 	}
+
+	t, _ := c.colls.Count(ctx)
+	fmt.Println(t)
+
 	embedQuery, err := c.ollamaEmbed.EmbedQuery(ctx, query)
 	if err != nil {
 		return "", err

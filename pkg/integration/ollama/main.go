@@ -80,7 +80,7 @@ func (o *Ollama) ClassifyDocument(ctx context.Context, textToSummarize string) (
 	return completion, nil
 }
 func (o *Ollama) QueryWithContext(ctx context.Context, queryContext string, query string) (string, error) {
-	prompt := fmt.Sprintf(`<|begin_of_text|><|start_header_id|>system<|end_header_id|>You are a helpful assistant that will help user to find the information in the given context. if you not found any, your answer should be "i dont know the answer yet"<|eot_id|>
+	prompt := fmt.Sprintf(`<|begin_of_text|><|start_header_id|>system<|end_header_id|>You are a helpful assistant that will help user to find the information in the given context. if you not found any, your answer should be "i dont know the answer yet" with no addition<|eot_id|>
 	<|start_header_id|>user<|end_header_id|>here the context: \n\n %s \n\n here the question: \n %s \n <|eot_id|>
 	<|start_header_id|>assistant<|end_header_id|>`, queryContext, query)
 

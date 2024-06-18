@@ -10,3 +10,13 @@ func Contains[T comparable](slice []T, search T) (found bool) {
 	}
 	return
 }
+func Distinct[T comparable](slice []T) []T {
+	disinct := []T{}
+	for _, v := range slice {
+		if !Contains(disinct, v) {
+			disinct = append(disinct, v)
+		}
+	}
+
+	return disinct
+}

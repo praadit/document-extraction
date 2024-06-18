@@ -494,33 +494,51 @@ func (c *Controller) EmbedDocument(ctx *gin.Context) {
 	tableData := helper.MapTableType(allBlocks)
 	if len(tableData) > 0 {
 		for tableIdx, table := range tableData {
-			if table.TableType == string(types.EntityTypeStructuredTable) {
-				for rowIdx, rowContent := range table.Data {
-					rowLine := []string{}
-					for columnIdx, columnContent := range rowContent {
-						if header, ok := table.Structure[columnIdx]; ok {
-							rowLine = append(rowLine, fmt.Sprintf("%s = %s", header, columnContent))
+			if table.Page >= 9 && table.Page <= 12 {
+				if table.TableType == string(types.EntityTypeStructuredTable) {
+					for rowIdx, rowContent := range table.Data {
+						rowLine := []string{}
+						metadatas := map[string]any{}
+						for columnIdx, columnContent := range rowContent {
+							if header, ok := table.Structure[columnIdx]; ok {
+								rowLine = append(rowLine, fmt.Sprintf("%s = %s", header, columnContent))
+								if strings.ToLower(header) == "description" {
+									pattern := `[^a-zA-Z0-9, ]`
+									re := regexp.MustCompile(pattern)
+									cleanedText := re.ReplaceAllString(columnContent, " ")
+
+									metadatas[strings.ToLower(header)] = cleanedText
+								}
+							}
 						}
-					}
 
-					chromaDocs = append(chromaDocs, chroma.ChromaDocument{
-						Document:  fmt.Sprintf("%s.", strings.Join(rowLine, "; ")),
-						MetaKey:   "Table Name",
-						MetaValue: fmt.Sprintf("%s-%d:%d", table.TableType, tableIdx, rowIdx),
-					})
-				}
-			} else if table.TableType == string(types.EntityTypeSemiStructuredTable) {
-				for rowIdx, rowContent := range table.Data {
-					rowLine := []string{}
-					for _, columnContent := range rowContent {
-						rowLine = append(rowLine, columnContent)
-					}
+						metadatas["page"] = table.Page
+						metadatas["table_type"] = table.TableType
+						metadatas["table_index"] = tableIdx
+						metadatas["row_index"] = rowIdx
 
-					chromaDocs = append(chromaDocs, chroma.ChromaDocument{
-						Document:  fmt.Sprintf("%s.", strings.Join(rowLine, ", ")),
-						MetaKey:   "Table Name",
-						MetaValue: fmt.Sprintf("%s-%d:%d", table.TableType, tableIdx, rowIdx),
-					})
+						chromaDocs = append(chromaDocs, chroma.ChromaDocument{
+							Document:  fmt.Sprintf("%s.", strings.Join(rowLine, "; ")),
+							Metadatas: metadatas,
+						})
+					}
+				} else if table.TableType == string(types.EntityTypeSemiStructuredTable) {
+					for rowIdx, rowContent := range table.Data {
+						rowLine := []string{}
+						for _, columnContent := range rowContent {
+							rowLine = append(rowLine, columnContent)
+						}
+
+						chromaDocs = append(chromaDocs, chroma.ChromaDocument{
+							Document: fmt.Sprintf("%s.", strings.Join(rowLine, ", ")),
+							Metadatas: map[string]any{
+								"page":        table.Page,
+								"table_type":  table.TableType,
+								"table_index": tableIdx,
+								"row_index":   rowIdx,
+							},
+						})
+					}
 				}
 			}
 		}
@@ -528,27 +546,31 @@ func (c *Controller) EmbedDocument(ctx *gin.Context) {
 	textLayout := helper.MapLayoutTextType(allBlocks)
 	if len(textLayout) > 0 {
 		for _, text := range textLayout {
-			fmt.Println(text.Paragraph)
-			pattern := `([^a-zA-Z0-9])\.`
+			if text.Page > 3 && text.Page <= 14 {
+				fmt.Println(text.Paragraph)
+				pattern := `([^a-zA-Z0-9])\.`
 
-			re := regexp.MustCompile(pattern)
-			delimitedText := re.ReplaceAllString(text.Paragraph, "$1@@@")
-			splitText := strings.Split(delimitedText, "@@@")
+				re := regexp.MustCompile(pattern)
+				delimitedText := re.ReplaceAllString(text.Paragraph, "$1@@@")
+				splitText := strings.Split(delimitedText, "@@@")
 
-			var splitedRes []string
-			for _, str := range splitText {
-				trimmed := strings.TrimSpace(str)
-				if trimmed != "" {
-					splitedRes = append(splitedRes, trimmed)
+				var splitedRes []string
+				for _, str := range splitText {
+					trimmed := strings.TrimSpace(str)
+					if trimmed != "" {
+						splitedRes = append(splitedRes, trimmed)
+					}
 				}
-			}
 
-			for idx, tx := range splitedRes {
-				chromaDocs = append(chromaDocs, chroma.ChromaDocument{
-					Document:  tx,
-					MetaKey:   "Page",
-					MetaValue: fmt.Sprintf("page%d:%d", text.Page, idx),
-				})
+				for idx, tx := range splitedRes {
+					chromaDocs = append(chromaDocs, chroma.ChromaDocument{
+						Document: tx,
+						Metadatas: map[string]any{
+							"page":       text.Page,
+							"text_index": idx,
+						},
+					})
+				}
 			}
 		}
 	}
@@ -587,7 +609,7 @@ func (c *Controller) AskOllama(ctx *gin.Context) {
 		})
 		return
 	}
-	queryContext, err := c.chroma.QueryContext(ctx, body.Query, 10)
+	queryContext, err := c.chroma.QueryContext(ctx, body.Query, 5)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, response.BaseResponse{
 			Message: utils.FilterError(ctx, err, "failed to query context").Error(),
